@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Mini Tetris</title>
+
+  <!-- キャッシュ強め端末向け（完全保証ではないが効くことが多い） -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
   <style>
     body {
       background: #111;
@@ -14,32 +20,43 @@
       align-items: center;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
       color: #eee;
-      padding: 12px;
+      padding: 8px;
       box-sizing: border-box;
     }
 
-.wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: min(420px, 100%);
-}
+    .wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: min(420px, 100%);
+    }
 
-canvas {
-  width: 100%;
-  height: auto;
-  max-height: 52vh;   /* ←追加：画面高さの52%までに制限 */
-  background: #000;
-  border: 2px solid #444;
-  border-radius: 12px;
-  touch-action: none;
-  display: block;
-}
+    /* ★重要：縦横比を固定して、マスが必ず正方形になるようにする */
+    canvas {
+      display: block;
+      margin: 0 auto;
+
+      /* 盤面比率（10列 : 20行 = 1 : 2）を維持 */
+      aspect-ratio: 10 / 20;
+
+      /* 画面に収める：高さ優先で縮める（スマホでも下に操作が入る） */
+      max-height: 45vh;
+      max-width: 100%;
+
+      /* 幅100%固定はやめる（横長化の原因） */
+      width: auto;
+      height: auto;
+
+      background: #000;
+      border: 2px solid #444;
+      border-radius: 12px;
+      touch-action: none; /* スワイプをブラウザに奪われない */
+    }
 
     .panel {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 8px;
       align-items: stretch;
     }
 
@@ -47,15 +64,15 @@ canvas {
       background: #1b1b1b;
       border: 1px solid #333;
       border-radius: 14px;
-      padding: 12px;
-      line-height: 1.6;
-      font-size: 14px;
+      padding: 10px;
+      line-height: 1.5;
+      font-size: 13px;
     }
 
     .title {
       font-weight: 800;
-      font-size: 16px;
-      margin-bottom: 6px;
+      font-size: 15px;
+      margin-bottom: 4px;
     }
 
     .small {
@@ -64,7 +81,7 @@ canvas {
     }
 
     button {
-      padding: 12px 12px;
+      padding: 10px 10px;
       border-radius: 14px;
       border: 1px solid #333;
       background: #222;
@@ -75,21 +92,21 @@ canvas {
     }
     button:active { transform: scale(0.98); }
 
-    /* 操作パッド（残しておく：スワイプが苦手ならボタンでも操作可） */
+    /* 操作パッド（スワイプ＋保険ボタン） */
     .pad {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 10px;
+      gap: 8px;
       user-select: none;
     }
     .pad button {
       font-size: 18px;
-      padding: 14px 10px;
+      padding: 12px 10px;
     }
     .row2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 8px;
     }
   </style>
 </head>
@@ -103,24 +120,23 @@ canvas {
         <div>Score: <span id="score">0</span></div>
         <div>Lines: <span id="lines">0</span></div>
         <div>Level: <span id="level">1</span></div>
-        <div class="small" style="margin-top:8px;">
+        <div class="small" style="margin-top:6px;">
           PC: ← → / ↑ 回転 / ↓ / Space<br/>
-          Mobile: スワイプ・タップ（＋下のボタンでも可）
+          Mobile: 左右スワイプ=移動 / 下スワイプ=落下<br/>
+          タップ=回転 / 長押し=DROP
         </div>
       </div>
 
       <div class="box">
         <button id="restart">Restart</button>
-        <div style="height:10px;"></div>
+        <div style="height:8px;"></div>
         <button id="pause">Pause / Resume</button>
-        <div class="small" style="margin-top:8px;">
-          スワイプ：左右=移動 / 下=落下<br/>
-          タップ：回転 / 長押し：DROP
+        <div class="small" style="margin-top:6px;">
+          ※スワイプが合わない時は下のボタンでもOK
         </div>
       </div>
     </div>
 
-    <!-- 保険：ボタン操作も残す（スワイプが効かない時用） -->
     <div class="pad">
       <button id="btnLeft">←</button>
       <button id="btnRotate">⟳</button>
@@ -136,7 +152,9 @@ canvas {
     // ====== 基本設定 ======
     const COLS = 10;
     const ROWS = 20;
-    const BLOCK = 10;
+
+    // ★ブロックをさらに小さく（内部解像度も小さくなる）
+    const BLOCK = 14;
 
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
@@ -154,6 +172,7 @@ canvas {
     const btnDown = document.getElementById("btnDown");
     const btnDrop = document.getElementById("btnDrop");
 
+    // 内部のキャンバスサイズ（ゲームロジック用）
     canvas.width = COLS * BLOCK;
     canvas.height = ROWS * BLOCK;
 
@@ -317,7 +336,6 @@ canvas {
           level = newLevel;
           dropInterval = Math.max(120, 700 - (level - 1) * 60);
         }
-
         updateHUD();
       }
     }
@@ -414,15 +432,16 @@ canvas {
         }
       }
 
+      // ゲームオーバー表示：ふぁいと！
       if (!running) {
         ctx.fillStyle = "rgba(0,0,0,0.65)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#fff";
         ctx.textAlign = "center";
-        ctx.font = "bold 26px system-ui";
+        ctx.font = "bold 22px system-ui";
         ctx.fillText("ふぁいと！", canvas.width / 2, canvas.height / 2);
-        ctx.font = "14px system-ui";
-        ctx.fillText("Restart を押してね", canvas.width / 2, canvas.height / 2 + 28);
+        ctx.font = "12px system-ui";
+        ctx.fillText("Restart を押してね", canvas.width / 2, canvas.height / 2 + 22);
       }
 
       if (paused) {
@@ -430,10 +449,8 @@ canvas {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#fff";
         ctx.textAlign = "center";
-        ctx.font = "bold 22px system-ui";
+        ctx.font = "bold 18px system-ui";
         ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
-        ctx.font = "12px system-ui";
-        ctx.fillText("Press Pause/Resume", canvas.width / 2, canvas.height / 2 + 24);
       }
     }
 
@@ -466,7 +483,7 @@ canvas {
       else if (e.code === "Space") hardDrop();
     });
 
-    // ====== ボタン入力（タップ） ======
+    // ====== ボタン入力 ======
     function bindTap(btn, fn) {
       btn.addEventListener("pointerdown", (e) => {
         e.preventDefault();
@@ -480,20 +497,14 @@ canvas {
     bindTap(btnDown, () => softDrop());
     bindTap(btnDrop, () => hardDrop());
 
-    // ====== スワイプ操作（ここが追加部分） ======
-    // 仕様：
-    // - 左右スワイプ：1マス移動
-    // - 下スワイプ：ソフトドロップ（大きく下ならハードドロップ）
-    // - タップ：回転
-    // - 長押し（350ms）：ハードドロップ
-    const SWIPE_MIN_PX = 28;       // これ以上動いたらスワイプ判定
-    const DROP_HARD_PX = 120;      // 下方向がこれ以上ならハードドロップ
-    const TAP_MAX_MOVE_PX = 10;    // この範囲ならタップ扱い
+    // ====== スワイプ操作 ======
+    const SWIPE_MIN_PX = 26;
+    const DROP_HARD_PX = 110;
+    const TAP_MAX_MOVE_PX = 10;
     const LONGPRESS_MS = 350;
 
     let startX = 0;
     let startY = 0;
-    let startTime = 0;
     let moved = false;
     let longPressTimer = null;
 
@@ -507,10 +518,8 @@ canvas {
 
       startX = e.clientX;
       startY = e.clientY;
-      startTime = Date.now();
       moved = false;
 
-      // 長押しでハードドロップ
       longPressTimer = setTimeout(() => {
         if (!moved && canControl()) hardDrop();
       }, LONGPRESS_MS);
@@ -522,6 +531,7 @@ canvas {
       if (!canControl()) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
+
       if (Math.abs(dx) > TAP_MAX_MOVE_PX || Math.abs(dy) > TAP_MAX_MOVE_PX) {
         moved = true;
         if (longPressTimer) {
@@ -542,20 +552,16 @@ canvas {
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
 
-      // タップ（ほぼ動いてない）
+      // タップ：回転
       if (Math.abs(dx) <= TAP_MAX_MOVE_PX && Math.abs(dy) <= TAP_MAX_MOVE_PX) {
         tryRotate();
         return;
       }
 
-      // スワイプ判定
+      // スワイプ
       if (Math.abs(dx) > Math.abs(dy)) {
-        // 左右
-        if (Math.abs(dx) >= SWIPE_MIN_PX) {
-          move(dx > 0 ? 1 : -1);
-        }
+        if (Math.abs(dx) >= SWIPE_MIN_PX) move(dx > 0 ? 1 : -1);
       } else {
-        // 上下（今回は下のみ使う）
         if (dy >= SWIPE_MIN_PX) {
           if (dy >= DROP_HARD_PX) hardDrop();
           else softDrop();
@@ -570,7 +576,7 @@ canvas {
       }
     });
 
-    // ====== UIボタン ======
+    // ====== UI ======
     restartBtn.addEventListener("click", () => reset());
     pauseBtn.addEventListener("click", () => { paused = !paused; });
 
@@ -580,6 +586,3 @@ canvas {
   </script>
 </body>
 </html>
-
-
-
