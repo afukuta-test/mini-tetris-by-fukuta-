@@ -25,19 +25,13 @@
       width: min(420px, 100%);
     }
 
-    .top {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-
     canvas {
       width: 100%;
       height: auto;
       background: #000;
       border: 2px solid #444;
       border-radius: 12px;
-      touch-action: none; /* スワイプ等をJSで拾いやすく */
+      touch-action: none; /* 重要：スワイプをブラウザに奪われない */
       display: block;
     }
 
@@ -80,7 +74,7 @@
     }
     button:active { transform: scale(0.98); }
 
-    /* ===== スマホ操作パッド ===== */
+    /* 操作パッド（残しておく：スワイプが苦手ならボタンでも操作可） */
     .pad {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -91,10 +85,6 @@
       font-size: 18px;
       padding: 14px 10px;
     }
-    .pad .wide {
-      grid-column: span 3;
-      font-size: 16px;
-    }
     .row2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -104,43 +94,39 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="top">
-      <canvas id="game" width="240" height="480"></canvas>
+    <canvas id="game" width="240" height="480"></canvas>
 
-      <div class="panel">
-        <div class="box">
-          <div class="title">Mini Tetris</div>
-          <div>Score: <span id="score">0</span></div>
-          <div>Lines: <span id="lines">0</span></div>
-          <div>Level: <span id="level">1</span></div>
-          <div class="small" style="margin-top:8px;">
-            PC: ← → / ↑ 回転 / ↓ / Space<br/>
-            Mobile: ボタン操作
-          </div>
-        </div>
-
-        <div class="box">
-          <button id="restart">Restart</button>
-          <div style="height:10px;"></div>
-          <button id="pause">Pause / Resume</button>
-          <div class="small" style="margin-top:8px;">
-            ※スマホは下の操作ボタンで動きます
-          </div>
+    <div class="panel">
+      <div class="box">
+        <div class="title">Mini Tetris</div>
+        <div>Score: <span id="score">0</span></div>
+        <div>Lines: <span id="lines">0</span></div>
+        <div>Level: <span id="level">1</span></div>
+        <div class="small" style="margin-top:8px;">
+          PC: ← → / ↑ 回転 / ↓ / Space<br/>
+          Mobile: スワイプ・タップ（＋下のボタンでも可）
         </div>
       </div>
 
-      <!-- 操作パッド -->
-      <div class="pad">
-        <button id="btnLeft">←</button>
-        <button id="btnRotate">⟳</button>
-        <button id="btnRight">→</button>
-
-        <div class="row2" style="grid-column: span 3;">
-          <button id="btnDown">↓</button>
-          <button id="btnDrop">DROP</button>
+      <div class="box">
+        <button id="restart">Restart</button>
+        <div style="height:10px;"></div>
+        <button id="pause">Pause / Resume</button>
+        <div class="small" style="margin-top:8px;">
+          スワイプ：左右=移動 / 下=落下<br/>
+          タップ：回転 / 長押し：DROP
         </div>
+      </div>
+    </div>
 
-        <button id="btnTapHint" class="wide">（任意）画面タップで回転</button>
+    <!-- 保険：ボタン操作も残す（スワイプが効かない時用） -->
+    <div class="pad">
+      <button id="btnLeft">←</button>
+      <button id="btnRotate">⟳</button>
+      <button id="btnRight">→</button>
+      <div class="row2" style="grid-column: span 3;">
+        <button id="btnDown">↓</button>
+        <button id="btnDrop">DROP</button>
       </div>
     </div>
   </div>
@@ -160,13 +146,12 @@
     const restartBtn = document.getElementById("restart");
     const pauseBtn = document.getElementById("pause");
 
-    // 操作ボタン
+    // ボタン
     const btnLeft = document.getElementById("btnLeft");
     const btnRight = document.getElementById("btnRight");
     const btnRotate = document.getElementById("btnRotate");
     const btnDown = document.getElementById("btnDown");
     const btnDrop = document.getElementById("btnDrop");
-    const btnTapHint = document.getElementById("btnTapHint");
 
     canvas.width = COLS * BLOCK;
     canvas.height = ROWS * BLOCK;
@@ -433,10 +418,10 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#fff";
         ctx.textAlign = "center";
-        ctx.font = "bold 24px system-ui";
-        ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
+        ctx.font = "bold 26px system-ui";
+        ctx.fillText("ふぁいと！", canvas.width / 2, canvas.height / 2);
         ctx.font = "14px system-ui";
-        ctx.fillText("Press Restart", canvas.width / 2, canvas.height / 2 + 28);
+        ctx.fillText("Restart を押してね", canvas.width / 2, canvas.height / 2 + 28);
       }
 
       if (paused) {
@@ -480,34 +465,108 @@
       else if (e.code === "Space") hardDrop();
     });
 
-    // ====== スマホ：ボタン入力（タップ） ======
+    // ====== ボタン入力（タップ） ======
     function bindTap(btn, fn) {
-      // クリックもタッチも両方拾う（ダブル実行防止のため pointer に統一）
       btn.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         if (!running || paused) return;
         fn();
       });
     }
-
     bindTap(btnLeft, () => move(-1));
     bindTap(btnRight, () => move(1));
     bindTap(btnRotate, () => tryRotate());
     bindTap(btnDown, () => softDrop());
     bindTap(btnDrop, () => hardDrop());
 
-    // 任意：キャンバスタップで回転（ON/OFFできるように）
-    let tapRotateEnabled = false;
-    btnTapHint.addEventListener("click", () => {
-      tapRotateEnabled = !tapRotateEnabled;
-      btnTapHint.textContent = tapRotateEnabled ? "画面タップで回転：ON" : "画面タップで回転：OFF";
-    });
+    // ====== スワイプ操作（ここが追加部分） ======
+    // 仕様：
+    // - 左右スワイプ：1マス移動
+    // - 下スワイプ：ソフトドロップ（大きく下ならハードドロップ）
+    // - タップ：回転
+    // - 長押し（350ms）：ハードドロップ
+    const SWIPE_MIN_PX = 28;       // これ以上動いたらスワイプ判定
+    const DROP_HARD_PX = 120;      // 下方向がこれ以上ならハードドロップ
+    const TAP_MAX_MOVE_PX = 10;    // この範囲ならタップ扱い
+    const LONGPRESS_MS = 350;
+
+    let startX = 0;
+    let startY = 0;
+    let startTime = 0;
+    let moved = false;
+    let longPressTimer = null;
+
+    function canControl() {
+      return running && !paused;
+    }
 
     canvas.addEventListener("pointerdown", (e) => {
-      if (!tapRotateEnabled) return;
       e.preventDefault();
-      if (!running || paused) return;
-      tryRotate();
+      if (!canControl()) return;
+
+      startX = e.clientX;
+      startY = e.clientY;
+      startTime = Date.now();
+      moved = false;
+
+      // 長押しでハードドロップ
+      longPressTimer = setTimeout(() => {
+        if (!moved && canControl()) hardDrop();
+      }, LONGPRESS_MS);
+
+      canvas.setPointerCapture?.(e.pointerId);
+    });
+
+    canvas.addEventListener("pointermove", (e) => {
+      if (!canControl()) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.abs(dx) > TAP_MAX_MOVE_PX || Math.abs(dy) > TAP_MAX_MOVE_PX) {
+        moved = true;
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      }
+    });
+
+    canvas.addEventListener("pointerup", (e) => {
+      e.preventDefault();
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      if (!canControl()) return;
+
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      // タップ（ほぼ動いてない）
+      if (Math.abs(dx) <= TAP_MAX_MOVE_PX && Math.abs(dy) <= TAP_MAX_MOVE_PX) {
+        tryRotate();
+        return;
+      }
+
+      // スワイプ判定
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // 左右
+        if (Math.abs(dx) >= SWIPE_MIN_PX) {
+          move(dx > 0 ? 1 : -1);
+        }
+      } else {
+        // 上下（今回は下のみ使う）
+        if (dy >= SWIPE_MIN_PX) {
+          if (dy >= DROP_HARD_PX) hardDrop();
+          else softDrop();
+        }
+      }
+    });
+
+    canvas.addEventListener("pointercancel", () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
     });
 
     // ====== UIボタン ======
