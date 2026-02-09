@@ -167,7 +167,7 @@
     // ★重要：表示サイズをJSで「幅と高さを同時に」計算してセット（ここで歪みを根絶）
     function fitCanvasToScreen() {
       // 操作エリアを確実に入れるため、盤面は画面高さの 42% 程度に制限
-      const maxBoardH = Math.floor(window.innerHeight * 0.6);
+      const maxBoardH = Math.floor(window.innerHeight * 0.7);
 
       // 盤面は 10:20 = 1:2 なので、幅 = 高さ / 2
       const maxBoardWFromH = Math.floor(maxBoardH / 2);
@@ -597,4 +597,5 @@
   </script>
 </body>
 </html>
+
 
