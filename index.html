@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Mini Tetris</title>
 
-  <!-- キャッシュ強め端末向け（完全保証ではないが効くことが多い） -->
+  <!-- キャッシュ対策（これだけで完全保証はできないので、URL末尾の ?v=3 が最強です） -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
@@ -31,26 +31,14 @@
       width: min(420px, 100%);
     }
 
-    /* ★重要：縦横比を固定して、マスが必ず正方形になるようにする */
+    /* ★ここがポイント：CSSで比率を頑張らず、表示サイズはJSで「幅と高さを同時に」設定する */
     canvas {
       display: block;
       margin: 0 auto;
-
-      /* 盤面比率（10列 : 20行 = 1 : 2）を維持 */
-      aspect-ratio: 10 / 20;
-
-      /* 画面に収める：高さ優先で縮める（スマホでも下に操作が入る） */
-      max-height: 45vh;
-      max-width: 100%;
-
-      /* 幅100%固定はやめる（横長化の原因） */
-      width: auto;
-      height: auto;
-
       background: #000;
       border: 2px solid #444;
       border-radius: 12px;
-      touch-action: none; /* スワイプをブラウザに奪われない */
+      touch-action: none;
     }
 
     .panel {
@@ -92,7 +80,6 @@
     }
     button:active { transform: scale(0.98); }
 
-    /* 操作パッド（スワイプ＋保険ボタン） */
     .pad {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -111,8 +98,8 @@
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <canvas id="game" width="240" height="480"></canvas>
+  <div class="wrap" id="wrap">
+    <canvas id="game"></canvas>
 
     <div class="panel">
       <div class="box">
@@ -153,9 +140,10 @@
     const COLS = 10;
     const ROWS = 20;
 
-    // ★ブロックをさらに小さく（内部解像度も小さくなる）
-    const BLOCK = 10;
+    // ブロックは小さめ（内部解像度）
+    const BLOCK = 14;
 
+    const wrap = document.getElementById("wrap");
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
 
@@ -172,9 +160,33 @@
     const btnDown = document.getElementById("btnDown");
     const btnDrop = document.getElementById("btnDrop");
 
-    // 内部のキャンバスサイズ（ゲームロジック用）
+    // 内部のキャンバスサイズ（描画はこの座標系で行う）
     canvas.width = COLS * BLOCK;
     canvas.height = ROWS * BLOCK;
+
+    // ★重要：表示サイズをJSで「幅と高さを同時に」計算してセット（ここで歪みを根絶）
+    function fitCanvasToScreen() {
+      // 操作エリアを確実に入れるため、盤面は画面高さの 42% 程度に制限
+      const maxBoardH = Math.floor(window.innerHeight * 0.42);
+
+      // 盤面は 10:20 = 1:2 なので、幅 = 高さ / 2
+      const maxBoardWFromH = Math.floor(maxBoardH / 2);
+
+      // wrapの幅（スマホ横幅）に合わせる
+      const wrapW = Math.floor(wrap.clientWidth);
+      const maxBoardW = Math.min(wrapW, maxBoardWFromH);
+
+      // 最終的な表示サイズ（必ず比率 1:2）
+      const displayW = Math.max(160, maxBoardW);      // 小さすぎ防止
+      const displayH = displayW * 2;
+
+      canvas.style.width = displayW + "px";
+      canvas.style.height = displayH + "px";
+    }
+
+    window.addEventListener("resize", fitCanvasToScreen);
+    window.addEventListener("orientationchange", () => setTimeout(fitCanvasToScreen, 100));
+    fitCanvasToScreen();
 
     // ====== テトリミノ定義 ======
     const SHAPES = {
@@ -432,7 +444,6 @@
         }
       }
 
-      // ゲームオーバー表示：ふぁいと！
       if (!running) {
         ctx.fillStyle = "rgba(0,0,0,0.65)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -468,7 +479,7 @@
       requestAnimationFrame(update);
     }
 
-    // ====== PCキーボード入力 ======
+    // ====== PC入力 ======
     document.addEventListener("keydown", (e) => {
       if (e.key === "p" || e.key === "P") {
         paused = !paused;
@@ -497,7 +508,7 @@
     bindTap(btnDown, () => softDrop());
     bindTap(btnDrop, () => hardDrop());
 
-    // ====== スワイプ操作 ======
+    // ====== スワイプ入力 ======
     const SWIPE_MIN_PX = 26;
     const DROP_HARD_PX = 110;
     const TAP_MAX_MOVE_PX = 10;
@@ -552,7 +563,7 @@
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
 
-      // タップ：回転
+      // タップ＝回転
       if (Math.abs(dx) <= TAP_MAX_MOVE_PX && Math.abs(dy) <= TAP_MAX_MOVE_PX) {
         tryRotate();
         return;
@@ -586,4 +597,3 @@
   </script>
 </body>
 </html>
-
