@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Mini Tetris</title>
 
-  <!-- キャッシュ対策（これだけで完全保証はできないので、URL末尾の ?v=3 が最強です） -->
+  <!-- キャッシュ対策（完全保証はできないので、Endpoint URLに ?v=○ を付け替えるのが最強） -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
@@ -18,7 +18,8 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans JP",
+        "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
       color: #eee;
       padding: 8px;
       box-sizing: border-box;
@@ -31,7 +32,6 @@
       width: min(420px, 100%);
     }
 
-    /* ★ここがポイント：CSSで比率を頑張らず、表示サイズはJSで「幅と高さを同時に」設定する */
     canvas {
       display: block;
       margin: 0 auto;
@@ -140,7 +140,7 @@
     const COLS = 10;
     const ROWS = 20;
 
-    // ブロックは小さめ（内部解像度）
+    // 内部解像度（当たり判定はこのまま）
     const BLOCK = 14;
 
     const wrap = document.getElementById("wrap");
@@ -153,31 +153,33 @@
     const restartBtn = document.getElementById("restart");
     const pauseBtn = document.getElementById("pause");
 
-    // ボタン
     const btnLeft = document.getElementById("btnLeft");
     const btnRight = document.getElementById("btnRight");
     const btnRotate = document.getElementById("btnRotate");
     const btnDown = document.getElementById("btnDown");
     const btnDrop = document.getElementById("btnDrop");
 
-    // 内部のキャンバスサイズ（描画はこの座標系で行う）
+    // 内部キャンバスサイズ（ロジック用）
     canvas.width = COLS * BLOCK;
     canvas.height = ROWS * BLOCK;
 
-    // ★重要：表示サイズをJSで「幅と高さを同時に」計算してセット（ここで歪みを根絶）
-    function fitCanvasToScreen() {
-      // 操作エリアを確実に入れるため、盤面は画面高さの 42% 程度に制限
-      const maxBoardH = Math.floor(window.innerHeight * 0.55);
+    // ====== ゲーム状態 ======
+    let gameState = "start"; // "start" | "play"
 
-      // 盤面は 10:20 = 1:2 なので、幅 = 高さ / 2
+    // ★重要：表示サイズをJSで計算してセット（iPhone/LINE内での歪み対策）
+    function fitCanvasToScreen() {
+      // 盤面の最大高さ（大きめ：必要なら0.58〜0.70で調整OK）
+      const maxBoardH = Math.floor(window.innerHeight * 0.63);
+
+      // 盤面は 10:20 = 1:2 → 幅 = 高さ / 2
       const maxBoardWFromH = Math.floor(maxBoardH / 2);
 
-      // wrapの幅（スマホ横幅）に合わせる
+      // wrap幅（スマホ横幅）との小さい方
       const wrapW = Math.floor(wrap.clientWidth);
       const maxBoardW = Math.min(wrapW, maxBoardWFromH);
 
-      // 最終的な表示サイズ（必ず比率 1:2）
-      const displayW = Math.max(170, maxBoardW);      // 小さすぎ防止
+      // 小さすぎ防止（必要ならここも調整）
+      const displayW = Math.max(220, maxBoardW);
       const displayH = displayW * 2;
 
       canvas.style.width = displayW + "px";
@@ -240,7 +242,7 @@
 
     const PIECE_KEYS = ["I","O","T","S","Z","J","L"];
 
-    // ====== 状態 ======
+    // ====== 状態（プレイ用） ======
     let board;
     let current;
     let next;
@@ -262,9 +264,7 @@
       return b;
     }
 
-    function cloneMatrix(m) {
-      return m.map(row => row.slice());
-    }
+    function cloneMatrix(m) { return m.map(row => row.slice()); }
 
     function randomPiece() {
       const k = PIECE_KEYS[Math.floor(Math.random() * PIECE_KEYS.length)];
@@ -413,7 +413,7 @@
       }
     }
 
-    // ====== 描画 ======
+    // ====== 描画（プレイ） ======
     function drawCell(x, y, v) {
       ctx.fillStyle = COLORS[v];
       ctx.fillRect(x * BLOCK, y * BLOCK, BLOCK, BLOCK);
@@ -465,22 +465,98 @@
       }
     }
 
+    // ====== 描画（スタート画面） ======
+    function drawStartScreen() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 背景（グラデっぽく）
+      const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      g.addColorStop(0, "#0f1020");
+      g.addColorStop(1, "#000000");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // タイトル
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 30px system-ui";
+      ctx.fillText("Mini Tetris", canvas.width / 2, canvas.height / 2 - 110);
+
+      ctx.font = "14px system-ui";
+      ctx.fillStyle = "#cfcfcf";
+      ctx.fillText("ボタンを押してね", canvas.width / 2, canvas.height / 2 - 85);
+
+      // ボタン（キャンバス上に描く）
+      const btnW = 260;
+      const btnH = 44;
+      const x = canvas.width / 2 - btnW / 2;
+      const y1 = canvas.height / 2 - 10;
+      const y2 = canvas.height / 2 + 50;
+
+      // 角丸っぽく見せる
+      drawRoundRect(x, y1, btnW, btnH, 12, "#222", "#666");
+      drawRoundRect(x, y2, btnW, btnH, 12, "#222", "#666");
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "16px system-ui";
+      ctx.fillText("テトリスをはじめる", canvas.width / 2, y1 + 29);
+      ctx.fillText("テトリスをはじめない", canvas.width / 2, y2 + 29);
+
+      // クリック判定用に保存
+      startButtons = {
+        a: { x, y: y1, w: btnW, h: btnH },
+        b: { x, y: y2, w: btnW, h: btnH },
+      };
+    }
+
+    function drawRoundRect(x, y, w, h, r, fill, stroke) {
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = stroke;
+      ctx.stroke();
+    }
+
+    let startButtons = null;
+
+    function startGame() {
+      gameState = "play";
+      reset();
+    }
+
     // ====== ループ ======
     function update(time = 0) {
       const delta = time - lastTime;
       lastTime = time;
 
-      if (!paused && running) {
-        dropCounter += delta;
-        if (dropCounter > dropInterval) softDrop();
+      if (gameState === "play") {
+        if (!paused && running) {
+          dropCounter += delta;
+          if (dropCounter > dropInterval) softDrop();
+        }
+        drawBoard();
+      } else {
+        drawStartScreen();
       }
 
-      drawBoard();
       requestAnimationFrame(update);
     }
 
     // ====== PC入力 ======
     document.addEventListener("keydown", (e) => {
+      // スタート画面中：どのキーでも開始（任意）
+      if (gameState === "start") {
+        if (e.key) startGame();
+        return;
+      }
+
       if (e.key === "p" || e.key === "P") {
         paused = !paused;
         return;
@@ -498,6 +574,13 @@
     function bindTap(btn, fn) {
       btn.addEventListener("pointerdown", (e) => {
         e.preventDefault();
+
+        // スタート画面中：下の操作ボタン押しても開始してプレイへ
+        if (gameState === "start") {
+          startGame();
+          return;
+        }
+
         if (!running || paused) return;
         fn();
       });
@@ -523,8 +606,36 @@
       return running && !paused;
     }
 
+    // 画面座標 → canvas座標に変換（スタート画面のボタン判定で必要）
+    function toCanvasPoint(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const x = (clientX - rect.left) * (canvas.width / rect.width);
+      const y = (clientY - rect.top) * (canvas.height / rect.height);
+      return { x, y };
+    }
+
     canvas.addEventListener("pointerdown", (e) => {
       e.preventDefault();
+
+      // スタート画面：どっち押しても開始（ボタンの上でも、どこでもOK）
+      if (gameState === "start") {
+        // ボタンの上を押したかは見た目のために判定しているだけ（どちらでも開始）
+        const p = toCanvasPoint(e.clientX, e.clientY);
+        if (startButtons) {
+          const hitA = p.x >= startButtons.a.x && p.x <= startButtons.a.x + startButtons.a.w &&
+                       p.y >= startButtons.a.y && p.y <= startButtons.a.y + startButtons.a.h;
+          const hitB = p.x >= startButtons.b.x && p.x <= startButtons.b.x + startButtons.b.w &&
+                       p.y >= startButtons.b.y && p.y <= startButtons.b.y + startButtons.b.h;
+          if (hitA || hitB) {
+            startGame();
+            return;
+          }
+        }
+        // ボタン以外でも開始
+        startGame();
+        return;
+      }
+
       if (!canControl()) return;
 
       startX = e.clientX;
@@ -539,7 +650,9 @@
     });
 
     canvas.addEventListener("pointermove", (e) => {
+      if (gameState !== "play") return;
       if (!canControl()) return;
+
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
 
@@ -554,6 +667,8 @@
 
     canvas.addEventListener("pointerup", (e) => {
       e.preventDefault();
+      if (gameState !== "play") return;
+
       if (longPressTimer) {
         clearTimeout(longPressTimer);
         longPressTimer = null;
@@ -588,19 +703,17 @@
     });
 
     // ====== UI ======
-    restartBtn.addEventListener("click", () => reset());
+    restartBtn.addEventListener("click", () => {
+      if (gameState === "start") {
+        startGame();
+        return;
+      }
+      reset();
+    });
     pauseBtn.addEventListener("click", () => { paused = !paused; });
 
-    // ====== 起動 ======
-    reset();
+    // 起動：最初はスタート画面
     requestAnimationFrame(update);
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
